@@ -1,4 +1,5 @@
 import argparse
+import json
 import shutil
 import sys
 from pathlib import Path
@@ -7,55 +8,28 @@ from PIL import Image, ImageOps
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tiff", ".tif"}
 
-# All 25 e-readers from output.md:29-54
-E_READERS: dict[str, tuple[tuple[int, int], str, str]] = {
-    # Kindle (7)
-    "kindle-11th-gen": ((1072, 1448), "Kindle (11th Gen)", "Amazon"),
-    "kindle-paperwhite-12th-gen": (
-        (1264, 1680),
-        "Kindle Paperwhite (12th Gen)",
-        "Amazon",
-    ),
-    "kindle-paperwhite-11th-gen": (
-        (1236, 1648),
-        "Kindle Paperwhite (11th Gen)",
-        "Amazon",
-    ),
-    "kindle-paperwhite-10th-gen": (
-        (1072, 1448),
-        "Kindle Paperwhite (10th Gen)",
-        "Amazon",
-    ),
-    "kindle-oasis-3rd-gen": ((1264, 1680), "Kindle Oasis (3rd Gen)", "Amazon"),
-    "kindle-scribe": ((1860, 2480), "Kindle Scribe", "Amazon"),
-    "kindle-colorsoft": ((1264, 1680), "Kindle Colorsoft", "Amazon"),
-    # Kobo (8)
-    "kobo-nia": ((758, 1024), "Kobo Nia", "Kobo"),
-    "kobo-clara-bw": ((1072, 1448), "Kobo Clara BW", "Kobo"),
-    "kobo-clara-2e": ((1072, 1448), "Kobo Clara 2E / Clara HD", "Kobo"),
-    "kobo-clara-colour": ((1072, 1448), "Kobo Clara Colour", "Kobo"),
-    "kobo-libra-2": ((1264, 1680), "Kobo Libra 2 / Libra H2O", "Kobo"),
-    "kobo-libra-colour": ((1264, 1680), "Kobo Libra Colour", "Kobo"),
-    "kobo-sage": ((1440, 1920), "Kobo Sage", "Kobo"),
-    "kobo-elipsa-2e": ((1404, 1872), "Kobo Elipsa 2E", "Kobo"),
-    # reMarkable (2)
-    "remarkable-2": ((1404, 1872), "reMarkable 2", "reMarkable"),
-    "remarkable-paper-pro": ((1620, 2160), "reMarkable Paper Pro", "reMarkable"),
-    # Boox (4)
-    "boox-palma": ((824, 1648), "Boox Palma", "Boox"),
-    "boox-page": ((1264, 1680), "Boox Page", "Boox"),
-    "boox-note-air": ((1404, 1872), "Boox Note Air Series", "Boox"),
-    "boox-tab-ultra": ((1404, 1872), "Boox Tab Ultra Series", "Boox"),
-    # Others
-    "nook-glowlight-4": ((1072, 1448), "Nook GlowLight 4", "B&N"),
-    "nook-glowlight-4e": ((758, 1024), "Nook GlowLight 4e", "B&N"),
-    "pocketbook-era": ((1264, 1680), "PocketBook Era", "PocketBook"),
-    "pocketbook-inkpad-4": (
-        (1404, 1872),
-        "PocketBook InkPad 4 / Color 3",
-        "PocketBook",
-    ),
-}
+# Shared with the web app: models.json is the single source of truth.
+MODELS_PATH = Path(__file__).with_name("models.json")
+
+
+def load_models() -> dict[str, tuple[tuple[int, int], str, str]]:
+    data = json.loads(MODELS_PATH.read_text(encoding="utf-8"))
+    models: dict[str, tuple[tuple[int, int], str, str]] = {}
+    for entry in data["models"]:
+        slug = entry["slug"]
+        if slug in models:
+            raise ValueError(f"duplicate model slug in {MODELS_PATH.name}: {slug}")
+        width, height = int(entry["width"]), int(entry["height"])
+        if width <= 0 or height <= 0:
+            raise ValueError(f"invalid size for model {slug}: {width}x{height}")
+        models[slug] = ((width, height), entry["name"], entry["brand"])
+    if not models:
+        raise ValueError(f"no models defined in {MODELS_PATH.name}")
+    return models
+
+
+# All 25 e-readers, loaded from models.json
+E_READERS = load_models()
 
 
 def clean_output(output: Path) -> None:
